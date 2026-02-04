@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Deepfake Detection{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+        <nav class="navbar">
+            <div class="container">
+                <div class="nav-brand">
+                    <h2>🔍 Deepfake Detector</h2>
+                </div>
+                <ul class="nav-menu">
+                    <li><a href="{% url 'detector:index' %}">📷 Detection</a></li>
+                    <li><a href="{% url 'detector:history' %}">📊 History</a></li>
+                </ul>
+            </div>
+        </nav>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Deepfake Detector | Powered by EfficientNet-B0</p>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

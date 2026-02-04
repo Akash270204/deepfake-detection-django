@@ -1,0 +1,50 @@
+{% extends 'detector/base.html' %}
+{% load static %}
+
+{% block title %}Home - Deepfake Detection{% endblock %}
+
+{% block content %}
+<div class="container">
+    <header class="page-header">
+        <h1>🔍 Deepfake Detection System</h1>
+        <p>Powered by AI Neural Network</p>
+    </header>
+
+    <div class="info-banner">
+        <span class="info-icon">ℹ️</span>
+        <p>Upload an image to analyze it for signs of digital manipulation and deepfake indicators.</p>
+    </div>
+
+    <!-- Upload Section -->
+    <div class="upload-section" id="uploadSection">
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📤</div>
+            <h3>Click to upload or drag and drop</h3>
+            <p>Supports: JPG, PNG (Max 50MB)</p>
+            <input type="file" id="fileInput" accept="image/*" hidden>
+        </div>
+    </div>
+
+    <!-- Preview Section -->
+    <div class="preview-section" id="previewSection" style="display: none;">
+        <img id="preview" src="" alt="Preview">
+        <div class="button-group">
+            <button id="analyzeBtn" class="btn btn-primary">Analyze for Deepfake</button>
+            <button id="resetBtn" class="btn btn-secondary">Reset</button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Analyzing image...</p>
+    </div>
+
+    <!-- Results -->
+    <div class="results" id="results" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/app.js' %}"></script>
+{% endblock %}
