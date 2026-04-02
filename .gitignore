@@ -16,10 +16,15 @@ media/
 # Dataset
 dataset/
 dataset_check/
-
+videos/
 # Logs
 logs/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# #metadata.json
+ml_models/*
+model_metadata_video.json
+model_metadata.json
