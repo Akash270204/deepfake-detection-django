@@ -2,17 +2,6 @@
 train_image_model.py  —  EfficientNet-B1 Deepfake Classifier (Fixed)
 ======================================================================
 
-FIXES vs original script:
-  1. BN layers in base LOCKED during phase 2 (collapse prevention #1)
-  2. LR2 = 1e-5  (was 1e-4 — 10x too high, destroyed pretrained weights)
-  3. UNFREEZE = 20 layers  (was 40 — caused overfitting on small datasets)
-  4. EarlyStopping monitors val_auc not val_loss
-  5. Focal loss alpha = 0.75  (was 0.25 — was upweighting REAL not FAKE)
-  6. Uses IMAGE_TRAIN/IMAGE_VAL/IMAGE_TEST paths (not mixed TRAIN/VAL)
-  7. Output range diagnostic printed after every phase
-  8. Threshold saved to model_metadata.json automatically
-  9. CollapseDetector callback stops training if outputs flatten
- 10. Warm-up LR schedule for phase 1 head stabilisation
 """
 
 import os

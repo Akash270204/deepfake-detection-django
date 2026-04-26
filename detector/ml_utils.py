@@ -1,46 +1,7 @@
 """
 ml_utils.py — Deepfake Detector Inference Utilities
 
-CHANGES IN THIS VERSION:
 
-1. _focal_loss alpha = 0.75 (correct — matches training)
-
-2. Bilateral filter removed from _preprocess_video_frame (correct — matches training)
-
-3. VIDEO DECISION LOGIC COMPLETELY REWRITTEN
-   Old logic: majority_vote — count frames above threshold, >50% = fake
-   Problem: 31 frames at score 0.59 beats 29 frames at score 0.10.
-            The model is barely calling 31 frames fake (0.59 ≈ threshold)
-            but strongly calling 29 frames real. The video is probably real.
-
-   New logic: weighted_average — three signals combined
-     a) Average fake probability across all frames (most important)
-     b) Fake frame percentage (secondary)
-     c) Confidence-weighted score (high-confidence frames count more)
-
-   Decision:
-     - weighted_score = 0.60 * avg_prob + 0.30 * fake_pct + 0.10 * conf_score
-     - is_deepfake = weighted_score > threshold
-
-   This means a video where all frames score 0.80-0.90 is correctly
-   called fake even if only 40% of frames cross the threshold.
-   A video where 55% of frames barely cross at 0.59 may correctly
-   be called real if the overall average is low.
-
-4. MOBILE VIDEO ROBUSTNESS AT INFERENCE
-   Added image enhancement before prediction for mobile frames:
-   - CLAHE (Contrast Limited Adaptive Histogram Equalization)
-     Corrects the low-contrast / dark frames that mobile cameras produce.
-     Does NOT alter model-relevant features, only makes the input
-     match the lighting distribution the model was trained on.
-   - No other changes to preprocessing — preprocess_input still applied.
-
-5. PARAMETERS USED FOR DECISION — explained in _make_video_decision():
-   - avg_fake_prob: mean of all frame fake probabilities
-   - fake_frame_pct: fraction of frames where P(fake) > threshold
-   - confidence_weighted_score: frames with higher max(p, 1-p) count more
-   - temporal_consistency: variance of frame scores (consistent = more reliable)
-   - weighted_score: final combined score for the is_deepfake decision
 """
 
 import gc
@@ -62,6 +23,41 @@ from tensorflow.keras.applications.efficientnet import preprocess_input
 
 logger = logging.getLogger(__name__)
 _detector_instance = None
+
+
+# =============================================================================
+# CUSTOM LAYERS — must be registered before any model load
+# =============================================================================
+
+class StochasticDepth(tf.keras.layers.Layer):
+    
+    def __init__(self, drop_rate=0.20, **kwargs):
+        super().__init__(**kwargs)
+        self.drop_rate = drop_rate
+
+    def call(self, inputs, training=False):
+        residual, shortcut = inputs
+        if not training:
+            # Inference: scale residual by survival probability
+            return shortcut + residual * (1.0 - self.drop_rate)
+        # Training: Bernoulli mask — randomly zero the residual per sample
+        batch_size = tf.shape(residual)[0]
+        mask = tf.cast(
+            tf.random.uniform([batch_size, 1]) > self.drop_rate,
+            dtype=residual.dtype,
+        )
+        return shortcut + residual * mask
+
+    def get_config(self):
+        cfg = super().get_config()
+        cfg.update({"drop_rate": self.drop_rate})
+        return cfg
+
+
+# Map of ALL custom objects needed by any saved model in this project
+_CUSTOM_OBJECTS = {
+    "StochasticDepth": StochasticDepth,
+}
 
 
 # =============================================================================
@@ -244,17 +240,39 @@ class DeepfakeDetector:
         )
 
     def _load_keras_model(self, model_path: Path):
+        """
+        FIX: custom_objects now includes StochasticDepth so the video model
+        (.h5) deserialises correctly. focal_loss also kept for image model.
+        Falls back to load without custom objects if both attempts fail.
+        """
         if not model_path.exists():
             raise FileNotFoundError(f"Model not found: {model_path}")
         logger.info(f"Loading {model_path} …")
+
+        # Build the full custom objects dict: StochasticDepth + focal_loss
+        custom_objects = {
+            **_CUSTOM_OBJECTS,
+            'focal_loss': self._focal_loss,
+        }
+
         try:
             model = keras.models.load_model(
                 model_path,
-                custom_objects={'focal_loss': self._focal_loss},
+                custom_objects=custom_objects,
                 compile=False,
             )
-        except Exception:
-            model = keras.models.load_model(model_path, compile=False)
+        except Exception as e1:
+            logger.warning(f"Load with custom_objects failed ({e1}), retrying without focal_loss …")
+            try:
+                model = keras.models.load_model(
+                    model_path,
+                    custom_objects=_CUSTOM_OBJECTS,  # StochasticDepth only
+                    compile=False,
+                )
+            except Exception as e2:
+                logger.warning(f"Load with StochasticDepth only failed ({e2}), bare load …")
+                model = keras.models.load_model(model_path, compile=False)
+
         model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
         self.input_size      = model.input_shape[1]
         self.is_binary_model = (model.output_shape[-1] == 1)
@@ -733,55 +751,19 @@ class DeepfakeDetector:
         return ind
 
     # =========================================================================
-    # VIDEO DECISION LOGIC — FIXED
-    #
-    # Parameters used and why:
-    #
-    # 1. avg_fake_prob (weight 0.60 — most important)
-    #    The average fake probability across ALL frames. This is the model's
-    #    core signal. A video where all frames score 0.80 is clearly fake.
-    #    A video where all frames score 0.30 is clearly real.
-    #    Weight 0.60 because this is the most reliable single number.
-    #
-    # 2. fake_frame_pct (weight 0.30 — secondary)
-    #    What fraction of frames exceeded the per-frame threshold.
-    #    Matters separately from avg because: a video where 5% of frames
-    #    score 0.95 (strong fake signal in some frames) but 95% score 0.40
-    #    might be a partially deepfaked video. The avg would be ~0.43 (below
-    #    threshold) but the fake_frame_pct = 5% catches the partial case.
-    #
-    # 3. confidence_weighted_score (weight 0.10 — tiebreaker)
-    #    Frames where the model is very confident (score close to 0 or 1)
-    #    are weighted higher than frames where the model is uncertain (score
-    #    close to 0.5). This prevents a pile of uncertain 0.55 predictions
-    #    from overriding a few very confident 0.95 predictions.
-    #
-    # Final decision:
-    #    weighted_score = 0.60 * avg_fake_prob + 0.30 * fake_frame_pct + 0.10 * conf_score
-    #    is_deepfake = weighted_score > VIDEO_DETECTION_THRESHOLD * 100
-    #
+    # VIDEO DECISION LOGIC — FIXED (weighted_average)
     # =========================================================================
 
     def _make_video_decision(self, frame_results: list, threshold_pct: float) -> dict:
-        """
-        Weighted combination of three signals for the final fake/real verdict.
-        See docstring above for full explanation of each parameter.
-        """
         probs = [f['fake_probability'] for f in frame_results]
 
-        # Signal 1: average fake probability across all frames
-        avg_fake_prob = float(np.mean(probs))
-
-        # Signal 2: fraction of frames above threshold
+        avg_fake_prob  = float(np.mean(probs))
         fake_frame_pct = sum(1 for p in probs if p > threshold_pct) / len(probs) * 100
 
-        # Signal 3: confidence-weighted score
-        # Confidence = max(p, 100-p) / 100  →  0.5 for uncertain, 1.0 for certain
-        conf_weights   = [max(p, 100 - p) / 100 for p in probs]
-        total_w        = sum(conf_weights) + 1e-8
-        conf_score     = sum(p * w for p, w in zip(probs, conf_weights)) / total_w
+        conf_weights  = [max(p, 100 - p) / 100 for p in probs]
+        total_w       = sum(conf_weights) + 1e-8
+        conf_score    = sum(p * w for p, w in zip(probs, conf_weights)) / total_w
 
-        # Final weighted score
         weighted_score = (
             0.60 * avg_fake_prob +
             0.30 * fake_frame_pct +
@@ -797,11 +779,11 @@ class DeepfakeDetector:
         )
 
         return {
-            'is_deepfake':          bool(is_deepfake),
-            'weighted_score':       round(weighted_score, 2),
-            'avg_fake_prob':        round(avg_fake_prob, 2),
-            'fake_frame_pct':       round(fake_frame_pct, 2),
-            'confidence_weighted':  round(conf_score, 2),
+            'is_deepfake':         bool(is_deepfake),
+            'weighted_score':      round(weighted_score, 2),
+            'avg_fake_prob':       round(avg_fake_prob, 2),
+            'fake_frame_pct':      round(fake_frame_pct, 2),
+            'confidence_weighted': round(conf_score, 2),
         }
 
     # =========================================================================
@@ -836,9 +818,7 @@ class DeepfakeDetector:
                 for i, fi in enumerate(frames_data['frames'])
             ]
 
-            # FIXED: Use weighted_average decision instead of majority_vote
-            decision = self._make_video_decision(frame_results, threshold_pct)
-
+            decision        = self._make_video_decision(frame_results, threshold_pct)
             deepfake_frames = sum(1 for r in frame_results if r['is_deepfake'])
             is_deepfake     = decision['is_deepfake']
             fake_prob       = round(decision['weighted_score'], 2)
@@ -866,7 +846,7 @@ class DeepfakeDetector:
                     'deepfakeFrames':        deepfake_frames,
                     'deepfakePercentage':    round(deepfake_frames / len(frame_results) * 100, 2),
                     'stabilityScore':        stability,
-                    'decisionBreakdown':     decision,   # new — shows all three signals
+                    'decisionBreakdown':     decision,
                     'temporalConsistency': {
                         'variance':      temporal['variance'],
                         'is_consistent': temporal['is_consistent'],
@@ -931,10 +911,10 @@ class DeepfakeDetector:
 
         top_suspicious = sorted(frame_results, key=lambda f: f['fake_probability'], reverse=True)[:5]
 
-        total       = len(frame_results)
-        fake_pos    = [f['frame_number'] for f in fake_frames]
-        avg_pos     = np.mean(fake_pos) / total if fake_pos else 0.5
-        location    = ('beginning' if avg_pos < 0.33 else 'end' if avg_pos > 0.66 else 'middle')
+        total    = len(frame_results)
+        fake_pos = [f['frame_number'] for f in fake_frames]
+        avg_pos  = np.mean(fake_pos) / total if fake_pos else 0.5
+        location = ('beginning' if avg_pos < 0.33 else 'end' if avg_pos > 0.66 else 'middle')
 
         return {
             'has_manipulation':            True,
@@ -963,7 +943,6 @@ class DeepfakeDetector:
             batch_arrs  = []
             for fp in batch_paths:
                 try:
-                    # Check if frame looks like mobile footage (low contrast)
                     is_mobile = self._is_frame_low_contrast(fp)
                     batch_arrs.append(self._preprocess_video_frame(fp, is_mobile_likely=is_mobile)[0])
                 except Exception:
@@ -983,10 +962,9 @@ class DeepfakeDetector:
 
     @staticmethod
     def _smooth(probs: list, window: int = 3) -> list:
-        """Light smoothing — weights [0.20, 0.60, 0.20] to preserve individual frame signal better."""
         if len(probs) < window:
             return probs
-        weights = np.array([0.20, 0.60, 0.20])   # FIX: was [0.25,0.50,0.25] — less blurring
+        weights = np.array([0.20, 0.60, 0.20])
         half    = window // 2
         out     = []
         for i in range(len(probs)):
@@ -1041,7 +1019,6 @@ class DeepfakeDetector:
         else:
             ind.append({'type': 'warning', 'message': 'High variance — may include compression artifacts'})
 
-        # Show decision breakdown if available
         if decision:
             avg  = decision.get('avg_fake_prob', 0)
             fpct = decision.get('fake_frame_pct', 0)
