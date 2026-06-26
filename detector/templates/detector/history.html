@@ -1,0 +1,271 @@
+{% extends 'detector/base.html' %}
+{% load static %}
+
+{% block title %}Detection History - Deepfake Detector{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1400px;">
+    <header class="page-header">
+        <h1>📊 Detection History</h1>
+        <p class="subtitle">Review past deepfake detection analyses</p>
+    </header>
+
+    {% if history_items %}
+        <!-- Filter and Stats -->
+        <div class="upload-section" style="margin-bottom: 2rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                <div style="padding: 1.5rem; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%); border-radius: 12px; text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #667eea; margin-bottom: 0.5rem;">{{ history_items|length }}</div>
+                    <div style="color: #666; font-weight: 600;">Total Analyses</div>
+                </div>
+                <!-- FIX: Count actual fake detections instead of dividing total by 2 -->
+                <div style="padding: 1.5rem; background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%); border-radius: 12px; text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #ef4444; margin-bottom: 0.5rem;" id="fakeCount">
+                        {{ fake_count }}
+                    </div>
+                    <div style="color: #666; font-weight: 600;">Deepfakes Found</div>
+                </div>
+                <div style="padding: 1.5rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%); border-radius: 12px; text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #10b981; margin-bottom: 0.5rem;">
+                        {{ real_count }}
+                    </div>
+                    <div style="color: #666; font-weight: 600;">Authentic Media</div>
+                </div>
+            </div>
+
+            <!-- Filter Buttons -->
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                <button onclick="filterHistory('all')" class="filter-btn active" id="filter-all" style="flex: 1; min-width: 140px; padding: 1rem 1.5rem; background: var(--gradient-main); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1rem; transition: all 0.3s; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
+                    <span style="margin-right: 0.5rem;">📋</span> All
+                </button>
+                <button onclick="filterHistory('fake')" class="filter-btn" id="filter-fake" style="flex: 1; min-width: 140px; padding: 1rem 1.5rem; background: linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(220, 38, 38, 0.9) 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1rem; transition: all 0.3s; opacity: 0.6;">
+                    <span style="margin-right: 0.5rem;">❌</span> Deepfakes
+                </button>
+                <button onclick="filterHistory('real')" class="filter-btn" id="filter-real" style="flex: 1; min-width: 140px; padding: 1rem 1.5rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.9) 0%, rgba(5, 150, 105, 0.9) 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1rem; transition: all 0.3s; opacity: 0.6;">
+                    <span style="margin-right: 0.5rem;">✅</span> Authentic
+                </button>
+                <button onclick="filterHistory('image')" class="filter-btn" id="filter-image" style="flex: 1; min-width: 140px; padding: 1rem 1.5rem; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1rem; transition: all 0.3s; opacity: 0.6;">
+                    <span style="margin-right: 0.5rem;">🖼️</span> Images
+                </button>
+                <button onclick="filterHistory('video')" class="filter-btn" id="filter-video" style="flex: 1; min-width: 140px; padding: 1rem 1.5rem; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 1rem; transition: all 0.3s; opacity: 0.6;">
+                    <span style="margin-right: 0.5rem;">🎬</span> Videos
+                </button>
+            </div>
+        </div>
+
+        <!-- History Table -->
+        <div class="upload-section">
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: separate; border-spacing: 0;">
+                    <thead>
+                        <tr style="background: var(--gradient-main); color: white;">
+                            <th style="padding: 1.25rem; text-align: left; border-top-left-radius: 12px; font-size: 0.95rem;">ID</th>
+                            <th style="padding: 1.25rem; text-align: left; font-size: 0.95rem;">Type</th>
+                            <th style="padding: 1.25rem; text-align: left; font-size: 0.95rem;">Filename</th>
+                            <th style="padding: 1.25rem; text-align: center; font-size: 0.95rem;">Result</th>
+                            <th style="padding: 1.25rem; text-align: center; font-size: 0.95rem;">Confidence</th>
+                            <th style="padding: 1.25rem; text-align: center; font-size: 0.95rem;">Probabilities</th>
+                            <th style="padding: 1.25rem; text-align: left; font-size: 0.95rem;">Date</th>
+                            <th style="padding: 1.25rem; text-align: center; border-top-right-radius: 12px; font-size: 0.95rem;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        {% for item in history_items %}
+                        <tr class="history-row"
+                            data-type="{{ item.file_type|default:'image' }}"
+                            data-result="{{ item.prediction }}"
+                            style="border-bottom: 1px solid #e5e7eb; transition: all 0.3s;">
+                            <td style="padding: 1rem; font-weight: 600; color: #667eea;">
+                                #{{ item.id }}
+                            </td>
+                            <td style="padding: 1rem;">
+                                <span class="badge badge-{% if item.file_type == 'video' %}video{% else %}image{% endif %}"
+                                      style="padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600; display: inline-block;">
+                                    {% if item.file_type == 'video' %}🎬 VIDEO{% else %}🖼️ IMAGE{% endif %}
+                                </span>
+                            </td>
+                            <td style="padding: 1rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem;" title="{{ item.filename }}">
+                                {{ item.filename }}
+                            </td>
+                            <td style="padding: 1rem; text-align: center;">
+                                <span class="badge badge-{{ item.prediction|lower }}"
+                                      style="padding: 0.6rem 1.5rem; border-radius: 20px; font-weight: 700; font-size: 0.95rem; display: inline-block; min-width: 120px;">
+                                    {% if item.prediction == 'FAKE' %}
+                                        ❌ FAKE
+                                    {% else %}
+                                        ✅ REAL
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td style="padding: 1rem; text-align: center;">
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+                                    <div style="width: 70px; height: 10px; background: #e5e7eb; border-radius: 10px; overflow: hidden;">
+                                        <div style="width: {{ item.confidence }}%; height: 100%; background: {% if item.confidence >= 90 %}var(--success){% elif item.confidence >= 70 %}var(--info){% else %}var(--warning){% endif %}; border-radius: 10px; transition: width 0.5s;"></div>
+                                    </div>
+                                    <strong style="font-size: 1.1rem; min-width: 50px;">{{ item.confidence }}%</strong>
+                                </div>
+                            </td>
+                            <td style="padding: 1rem; text-align: center;">
+                                <div style="font-size: 0.9rem;">
+                                    <div style="color: #10b981; font-weight: 600;">Real: {{ item.real_probability }}%</div>
+                                    <div style="color: #ef4444; font-weight: 600; margin-top: 0.25rem;">Fake: {{ item.fake_probability }}%</div>
+                                </div>
+                            </td>
+                            <td style="padding: 1rem; color: #666; font-size: 0.9rem;">
+                                {{ item.created_at|date:"M d, Y" }}<br>
+                                <small style="opacity: 0.7;">{{ item.created_at|date:"h:i A" }}</small>
+                            </td>
+                            <td style="padding: 1rem; text-align: center;">
+                                <button onclick="showDetails({{ item.id }})"
+                                        style="padding: 0.75rem 1.5rem; background: var(--gradient-main); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; transition: all 0.3s; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3); min-width: 100px;">
+                                    <span style="margin-right: 0.5rem;">👁️</span> View
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    {% else %}
+        <!-- Empty State -->
+        <div class="upload-section" style="text-align: center; padding: 4rem 2rem;">
+            <div style="font-size: 5rem; margin-bottom: 1.5rem; opacity: 0.3;">📊</div>
+            <h2 style="color: #667eea; margin-bottom: 1rem; font-size: 2rem;">No Detection History Yet</h2>
+            <p style="font-size: 1.1rem; color: #666; margin-bottom: 2rem; max-width: 500px; margin-left: auto; margin-right: auto; line-height: 1.7;">
+                Start analyzing images and videos for deepfakes to build your detection history.
+                All your past analyses will appear here.
+            </p>
+            <a href="{% url 'detector:index' %}" class="btn btn-primary" style="display: inline-block; text-decoration: none; padding: 1.25rem 2.5rem; font-size: 1.1rem;">
+                <span style="margin-right: 0.5rem;">🔍</span> Start Analyzing
+            </a>
+        </div>
+    {% endif %}
+
+    <!-- Back Button -->
+    <div style="text-align: center; margin-top: 2rem;">
+        <a href="{% url 'detector:index' %}" class="btn btn-secondary" style="display: inline-block; text-decoration: none; padding: 1rem 2rem; font-size: 1rem;">
+            <span style="margin-right: 0.5rem;">←</span> Back to Detection
+        </a>
+    </div>
+</div>
+
+<!-- Details Modal -->
+<div id="detailsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 9999; align-items: center; justify-content: center; padding: 2rem; overflow-y: auto;">
+    <div style="background: white; border-radius: 20px; padding: 2.5rem; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); position: relative;">
+        <button onclick="closeDetails()" style="position: absolute; top: 1.5rem; right: 1.5rem; background: none; border: none; font-size: 2.5rem; cursor: pointer; color: #999; line-height: 1; transition: color 0.3s; padding: 0.5rem; width: 3rem; height: 3rem; display: flex; align-items: center; justify-content: center;">
+            &times;
+        </button>
+        <div id="detailsContent"></div>
+    </div>
+</div>
+
+<style>
+.history-row:hover {
+    background: rgba(102, 126, 234, 0.05);
+    transform: scale(1.005);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.badge-video {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.15) 100%);
+    color: #667eea;
+    border: 2px solid rgba(102, 126, 234, 0.3);
+}
+.badge-image {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%);
+    color: #10b981;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+}
+.badge-fake {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.15) 100%);
+    color: #dc2626;
+    border: 2px solid rgba(239, 68, 68, 0.3);
+}
+.badge-real {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%);
+    color: #16a34a;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+}
+.filter-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2) !important;
+    opacity: 1 !important;
+}
+.filter-btn.active {
+    opacity: 1 !important;
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4) !important;
+}
+button[onclick*="showDetails"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5) !important;
+}
+</style>
+
+<script>
+function filterHistory(type) {
+    const rows = document.querySelectorAll('.history-row');
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.opacity = '0.6';
+    });
+    const activeBtn = document.getElementById('filter-' + type);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.opacity = '1';
+    }
+
+    rows.forEach(row => {
+        const rowType   = row.getAttribute('data-type');
+        const rowResult = row.getAttribute('data-result');
+        let show = true;
+        if (type === 'image' && rowType !== 'image') show = false;
+        if (type === 'video' && rowType !== 'video') show = false;
+        if (type === 'fake'  && rowResult !== 'FAKE') show = false;
+        if (type === 'real'  && rowResult !== 'REAL') show = false;
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function showDetails(id) {
+    document.getElementById('detailsContent').innerHTML = `
+        <h2 style="color: #667eea; margin-bottom: 1.5rem; font-size: 2rem; padding-right: 3rem;">
+            📊 Detection Details #${id}
+        </h2>
+        <div style="padding: 1.5rem; background: rgba(102, 126, 234, 0.05); border-radius: 12px; margin-bottom: 1.5rem;">
+            <p style="color: #666; line-height: 1.7; margin-bottom: 1rem;">
+                <strong>Note:</strong> Full detection details including heatmaps, facial analysis,
+                and artifact maps are available when you analyze new media. Historical records
+                show summary information only.
+            </p>
+            <p style="color: #666; line-height: 1.7;">
+                To see detailed analysis with visualizations, re-upload the media file and analyze it again.
+            </p>
+        </div>
+        <div style="text-align: center; margin-top: 2rem;">
+            <button onclick="closeDetails()" class="btn btn-secondary" style="padding: 1rem 2rem; font-size: 1rem;">
+                Close
+            </button>
+        </div>
+    `;
+    document.getElementById('detailsModal').style.display = 'flex';
+}
+
+function closeDetails() {
+    document.getElementById('detailsModal').style.display = 'none';
+}
+
+document.getElementById('detailsModal')?.addEventListener('click', function(e) {
+    if (e.target === this) closeDetails();
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const allBtn = document.getElementById('filter-all');
+    if (allBtn) {
+        allBtn.classList.add('active');
+        allBtn.style.opacity = '1';
+    }
+});
+</script>
+{% endblock %}

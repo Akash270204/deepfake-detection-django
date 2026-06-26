@@ -1,0 +1,175 @@
+{% extends 'detector/base.html' %}
+{% load static %}
+
+{% block title %}Sign Up - Deepfake Detector{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 500px; margin-top: 3rem;">
+    <!-- Page Header -->
+    <header class="page-header" style="margin-bottom: 2rem;">
+        <h1>🔐 Create Account</h1>
+        <p class="subtitle">Join our deepfake detection platform</p>
+        
+        {% if request.GET.video %}
+        <!-- Video Detection Redirect Message -->
+        <div style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.2) 0%, rgba(202, 138, 4, 0.15) 100%); border: 2px solid rgba(234, 179, 8, 0.4); border-radius: 12px; padding: 1.5rem; margin-top: 1rem; backdrop-filter: blur(10px); animation: slideInDown 0.5s ease;">
+            <div style="display: flex; align-items: start; gap: 1rem;">
+                <span style="font-size: 2rem;">🎬</span>
+                <div>
+                    <p style="color: #78350f; margin: 0; font-weight: 600; margin-bottom: 0.5rem;">
+                        Video Detection Requires Account
+                    </p>
+                    <p style="color: #92400e; margin: 0; line-height: 1.6;">
+                        Sign up now to unlock video deepfake analysis! After creating your account, 
+                        you'll be able to analyze videos up to 200MB and access all premium features.
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.1) 100%); border: 2px solid rgba(102, 126, 234, 0.3); border-radius: 12px; padding: 1rem; margin-top: 1rem; backdrop-filter: blur(10px);">
+            <p style="color: white; margin: 0; line-height: 1.6;">
+                ✨ <strong>Free Account Benefits:</strong><br>
+                • Analyze videos for deepfakes (up to 200MB)<br>
+                • Access your complete detection history<br>
+                • Track confidence scores over time<br>
+                • No credit card required
+            </p>
+        </div>
+    </header>
+
+    <!-- Sign Up Form -->
+    <div class="upload-section">
+        <form method="post" action="{% url 'detector:signup' %}" id="signupForm">
+            {% csrf_token %}
+            
+            <!-- Hidden field to preserve video parameter -->
+            {% if request.GET.video %}
+            <input type="hidden" name="video" value="true">
+            {% endif %}
+            
+            <!-- Error Messages -->
+            {% if form.errors %}
+                <div style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%); border: 2px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">
+                    <div style="display: flex; align-items: start; gap: 0.75rem;">
+                        <span style="font-size: 1.5rem;">❌</span>
+                        <div>
+                            <strong style="color: #dc2626; display: block; margin-bottom: 0.5rem;">Please correct the following errors:</strong>
+                            <ul style="margin: 0; padding-left: 1.25rem; color: #991b1b;">
+                                {% for field in form %}
+                                    {% for error in field.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Username Field -->
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label for="{{ form.username.id_for_label }}" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">
+                    <span style="margin-right: 0.5rem;">👤</span> Username
+                </label>
+                {{ form.username }}
+                <small style="display: block; margin-top: 0.5rem; color: #666;">
+                    Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.
+                </small>
+            </div>
+
+            <!-- Email Field -->
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label for="{{ form.email.id_for_label }}" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">
+                    <span style="margin-right: 0.5rem;">📧</span> Email
+                </label>
+                {{ form.email }}
+            </div>
+
+            <!-- Password Field -->
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label for="{{ form.password1.id_for_label }}" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">
+                    <span style="margin-right: 0.5rem;">🔒</span> Password
+                </label>
+                {{ form.password1 }}
+                <small style="display: block; margin-top: 0.5rem; color: #666;">
+                    • Must be at least 8 characters<br>
+                    • Cannot be too similar to your username<br>
+                    • Cannot be entirely numeric
+                </small>
+            </div>
+
+            <!-- Confirm Password Field -->
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="{{ form.password2.id_for_label }}" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">
+                    <span style="margin-right: 0.5rem;">🔒</span> Confirm Password
+                </label>
+                {{ form.password2 }}
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">
+                <span>✨</span> Create Account
+            </button>
+
+            <!-- Login Link -->
+            <div style="text-align: center; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+                <p style="color: #666;">
+                    Already have an account?
+                    <a href="{% url 'detector:login' %}{% if request.GET.video %}?video=true{% endif %}" style="color: #667eea; font-weight: 600; text-decoration: none; margin-left: 0.25rem;">
+                        Log In
+                    </a>
+                </p>
+            </div>
+        </form>
+    </div>
+
+    <!-- Back to Home -->
+    <div style="text-align: center; margin-top: 2rem;">
+        <a href="{% url 'detector:index' %}" style="color: white; text-decoration: none; opacity: 0.8; transition: opacity 0.3s;">
+            <span>←</span> Back to Home
+        </a>
+    </div>
+</div>
+
+<style>
+.form-input {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s;
+    background: white;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-input::placeholder {
+    color: #9ca3af;
+}
+
+.form-group {
+    animation: slideInUp 0.4s ease;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+{% endblock %}
