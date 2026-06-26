@@ -29,7 +29,7 @@ class DetectionHistoryAdmin(admin.ModelAdmin):
     ]
     
     readonly_fields = [
-        'filename',  # ✅ FIXED: Changed from 'image' to 'filename'
+        'filename',  
         'prediction',
         'is_deepfake',
         'confidence',

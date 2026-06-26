@@ -1,0 +1,8 @@
+Django>=4.2,<5.0
+gunicorn==21.2.0
+tensorflow==2.15.0
+opencv-python-headless==4.9.0.80
+Pillow==10.3.0
+numpy==1.26.4
+matplotlib==3.8.4
+whitenoise==6.7.0

@@ -1,14 +1,3 @@
-"""
-views.py — Deepfake Detector Django Views
-
-FIXES:
-  1. dashboard: all_users query now correctly imports Count before use
-     and uses annotation properly.
-  2. predict: removed redundant file_type override logic that could
-     cause confusion when extension and frontend disagree.
-  3. _save_history: safer field access — no crash if videoAnalysis missing.
-"""
-
 import json
 import logging
 import time
